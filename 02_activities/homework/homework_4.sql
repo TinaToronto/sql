@@ -17,8 +17,10 @@ The `||` values concatenate the columns into strings.
 Edit the appropriate columns -- you're making two edits -- and the NULL rows will be fixed. 
 All the other rows will remain the same.) */
 
-
-
+Answer: 
+SELECT 
+COALESCE(product_name, '') || ', ' || product_size || ' (' || COALESCE(product_qty_type, 'unit') || ')'
+FROM product
 
 --Windowed Functions
 /* 1. Write a query that selects from the customer_purchases table and numbers each customer’s  
@@ -30,17 +32,51 @@ each new market date for each customer, or select only the unique market dates p
 (without purchase details) and number those visits. 
 HINT: One of these approaches uses ROW_NUMBER() and one uses DENSE_RANK(). */
 
+Answer:
+Approach1
+SELECT 
+    customer_id, 
+    market_date, 
+    DENSE_RANK() OVER (PARTITION BY customer_id ORDER BY market_date) AS visit_number
+FROM 
+    customer_purchases
+
+Approach2
+SELECT 
+    customer_id, 
+    market_date, 
+    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY market_date) AS visit_number
+FROM 
+    customer_purchases
+
 
 /* 2. Reverse the numbering of the query from a part so each customer’s most recent visit is labeled 1, 
 then write another query that uses this one as a subquery (or temp table) and filters the results to 
 only the customer’s most recent visit. */
 
+Answer:
+SELECT *
+FROM (
+    SELECT 
+        customer_id, 
+        market_date, 
+        ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY market_date DESC) AS visit_number
+    FROM 
+        customer_purchases
+) AS visits
+WHERE visit_number = 1
 
 /* 3. Using a COUNT() window function, include a value along with each row of the 
 customer_purchases table that indicates how many different times that customer has purchased that product_id. */
 
-
-
+Answer:
+SELECT 
+    customer_id, 
+    product_id, 
+    market_date, 
+    COUNT(*) OVER (PARTITION BY customer_id, product_id) AS purchase_count
+FROM 
+    customer_purchases
 
 -- String manipulations
 /* 1. Some product names in the product table have descriptions like "Jar" or "Organic". 
@@ -54,11 +90,27 @@ Remove any trailing or leading whitespaces. Don't just use a case statement for 
 
 Hint: you might need to use INSTR(product_name,'-') to find the hyphens. INSTR will help split the column. */
 
-
+Answer:
+SELECT 
+    product_name,
+    TRIM(SUBSTR(product_name, INSTR(product_name, '-') + 1)) AS product_description
+FROM 
+    product
+WHERE 
+    INSTR(product_name, '-') > 0
 
 /* 2. Filter the query to show any product_size value that contain a number with REGEXP. */
 
-
+Answer:
+SELECT 
+    product_name, 
+    product_size,
+    TRIM(SUBSTR(product_name, INSTR(product_name, '-') + 1)) AS product_description
+FROM 
+    product
+WHERE 
+    INSTR(product_name, '-') > 0
+    AND product_size REGEXP '[0-9]'
 
 -- UNION
 /* 1. Using a UNION, write a query that displays the market dates with the highest and lowest total sales.
@@ -69,6 +121,51 @@ HINT: There are a possibly a few ways to do this query, but if you're struggling
 "best day" and "worst day"; 
 3) Query the second temp table twice, once for the best day, once for the worst day, 
 with a UNION binding them. */
+
+Answer:
+  
+-- Step 1: Create a CTE to find total sales for each market date
+WITH total_sales_by_date AS (
+    SELECT 
+        market_date, 
+        SUM(quantity * cost_to_customer_per_qty) AS total_sales
+    FROM 
+        customer_purchases
+    GROUP BY 
+        market_date
+),
+
+-- Step 2: Create another CTE with a RANK() window function to rank by total sales
+ranked_sales AS (
+    SELECT 
+        market_date, 
+        total_sales, 
+        RANK() OVER (ORDER BY total_sales DESC) AS best_rank,
+        RANK() OVER (ORDER BY total_sales ASC) AS worst_rank
+    FROM 
+        total_sales_by_date
+)
+
+-- Step 3: Query the ranked CTE to get the best and worst days
+SELECT 
+    market_date, 
+    total_sales, 
+    'Best Day' AS category
+FROM 
+    ranked_sales
+WHERE 
+    best_rank = 1
+
+UNION
+
+SELECT 
+    market_date, 
+    total_sales, 
+    'Worst Day' AS category
+FROM 
+    ranked_sales
+WHERE 
+    worst_rank = 1;
 
 
 
